@@ -31,5 +31,6 @@ export AZURE_DEVOPS_EXT_PAT='Azure DevOps personal access token'
 cargo run --  --organization "Organization_Name" \
               --pipeline_id 999 \
               --project "Project_Name" \
-              --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}"
+              --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}" \
+              --watch
 ```
