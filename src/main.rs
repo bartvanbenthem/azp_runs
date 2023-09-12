@@ -1,7 +1,7 @@
 use clap::{App, Arg};
 use reqwest::{header, Client};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::env;
 use std::error::Error;
 use std::thread;
@@ -55,11 +55,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = Client::new();
 
     // create a valid json body from the template parameters
-    let template_params = &config.template_parameters;
-    let json_result = match pipeline_parameters(template_params) {
-        Ok(json_result) => json_result,
-        Err(e) => panic!("failed json parsing: {}", e),
-    };
+    let json_result;
+    if config.template_parameters.len() != 0 {
+        let template_params = &config.template_parameters;
+        json_result = match pipeline_parameters(template_params) {
+            Ok(json_result) => json_result,
+            Err(e) => panic!("failed json parsing: {}", e),
+        };
+    } else {
+        json_result = Value::Object(Map::new());
+    }
 
     // Send a POST request to trigger a pipeline run
     let response = client
@@ -174,7 +179,7 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
         )
         .arg(
             Arg::with_name("pipeline_id")
-                .short("id")
+                .short("i")
                 .long("pipeline_id")
                 .required(true)
                 .takes_value(true)
