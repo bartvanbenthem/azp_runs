@@ -1,9 +1,11 @@
-use reqwest::{header, Client};
-use serde_json::{json, Value};
-use serde::Deserialize;
 use clap::{App, Arg};
+use reqwest::{header, Client};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::env;
 use std::error::Error;
+use std::thread;
+use std::time::Duration;
 
 // Azure DevOps Personal Access Token (PAT)
 const AZURE_DEVOPS_PAT_ENV: &str = "AZURE_DEVOPS_EXT_PAT";
@@ -14,17 +16,20 @@ pub struct Config {
     pub project: String,
     pub pipeline_id: u32,
     pub template_parameters: String,
+    pub watch: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct Response {
     pipeline: PipelineInfo,
+    id: u32,
+    state: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct PipelineInfo {
     //url: String,
-    //id: i32,
+    id: i32,
     //revision: i32,
     name: String,
     //folder: String,
@@ -56,13 +61,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Err(e) => panic!("failed json parsing: {}", e),
     };
 
-
     // Send a POST request to trigger a pipeline run
     let response = client
-        .post(&pipeline_run_url(config))
+        .post(&pipeline_run_url(&config))
         .header(header::ACCEPT, "application/json")
         .header(header::CONTENT_TYPE, "application/json")
-        .header(header::AUTHORIZATION, format!("Basic {}", base64::encode(&format!(":{}", pat))))
+        .header(
+            header::AUTHORIZATION,
+            format!("Basic {}", base64::encode(&format!(":{}", pat))),
+        )
         .json(&json_result)
         .send()
         .await?;
@@ -72,27 +79,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
         reqwest::StatusCode::OK => {
             let body = response.bytes().await?;
             let response_str = String::from_utf8_lossy(&body);
-            let response_object: Response = serde_json::from_str(&response_str)
-                .unwrap();
+            let response_object: Response = serde_json::from_str(&response_str).unwrap();
 
-            println!("Pipeline [{}] triggered successfully!",  
-                response_object.pipeline.name);
-            Ok(())
+            println!(
+                "Pipeline [{}] with id [{}] triggered successfully, run id = [{}]",
+                response_object.pipeline.name, response_object.pipeline.id, response_object.id
+            );
+
+            if config.watch == true {
+                // Call the watch function asynchronously
+                let watch_result = pipeline_watch(&config, pat.clone(), response_object.id).await;
+
+                // Handle the result of the watch function
+                match watch_result {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Error in watch function: {}", err);
+                        std::process::exit(1);
+                    }
+                }
+            }
         }
         _ => {
-            eprintln!("Failed to trigger the pipeline run: {:?}", 
-                response.status());
+            eprintln!(
+                "Failed to trigger the pipeline run: {:?}",
+                response.status()
+            );
             std::process::exit(1);
         }
     }
-}
 
-// Pipeline run URL builder function
-fn pipeline_run_url(config :Config) -> String {
-    format!(
-        "https://dev.azure.com/{}/{}/_apis/pipelines/{}/runs?api-version=7.1-preview.1",
-        config.organization, config.project, config.pipeline_id
-    )
+    Ok(())
 }
 
 fn is_valid_u32(value: String) -> Result<(), String> {
@@ -172,20 +189,94 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
                 .takes_value(true)
                 .help("Pipeline Template Parameters"),
         )
+        .arg(
+            Arg::with_name("watch")
+                .short("w")
+                .long("watch")
+                .required(false)
+                .takes_value(false)
+                .help("Watch pipeline status and block untill finished"),
+        )
         .get_matches();
 
+    let w: bool;
+    // Check if the --watch parameter was provided
+    if matches.is_present("watch") {
+        w = true;
+    } else {
+        w = false;
+    }
+
     Ok(Config {
-        organization: matches.value_of("organization")
-                             .expect("organization is required")
-                             .to_string(),
-        project: matches.value_of("project")
-                             .expect("project is required")
-                             .to_string(),
-        pipeline_id: matches.value_of("pipeline_id")
-                             .expect("pipeline_id is required")
-                             .parse::<u32>()?,
-        template_parameters: matches.value_of("template_parameters")
-                                    .unwrap_or("")
-                                    .to_string(),
+        organization: matches
+            .value_of("organization")
+            .expect("organization is required")
+            .to_string(),
+        project: matches
+            .value_of("project")
+            .expect("project is required")
+            .to_string(),
+        pipeline_id: matches
+            .value_of("pipeline_id")
+            .expect("pipeline_id is required")
+            .parse::<u32>()?,
+        template_parameters: matches
+            .value_of("template_parameters")
+            .unwrap_or("")
+            .to_string(),
+        watch: w,
     })
+}
+
+// Pipeline run URL builder function
+fn pipeline_run_url(config: &Config) -> String {
+    format!(
+        "https://dev.azure.com/{}/{}/_apis/pipelines/{}/runs?api-version=7.1-preview.1",
+        config.organization, config.project, config.pipeline_id
+    )
+}
+
+async fn pipeline_watch(config: &Config, pat: String, run_id: u32) -> Result<(), Box<dyn Error>> {
+    let pipeline_status_url = format!(
+        "https://dev.azure.com/{}/{}/_apis/pipelines/{}/runs/{}?api-version=7.1-preview.1",
+        config.organization, config.project, config.pipeline_id, run_id
+    );
+
+    // Create an HTTP client
+    let client = Client::new();
+
+    loop {
+        // Send a GET request to the Azure DevOps API to get the pipeline run status
+        let response = client
+            .get(&pipeline_status_url)
+            .header(header::ACCEPT, "application/json")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(
+                header::AUTHORIZATION,
+                format!("Basic {}", base64::encode(&format!(":{}", pat))),
+            )
+            .send()
+            .await?;
+
+        // Check if the request was successful
+        if response.status().is_success() {
+            let status_json: Response = response.json().await?;
+            let status = status_json.state.as_str();
+            // Check if the pipeline has finished executing
+            if status == "completed" || status == "canceled" || status == "failed" {
+                println!("Pipeline has finished with status: {}", status);
+                break; // Exit the loop
+            } else {
+                println!("Pipeline status: {}", status);
+            }
+        } else {
+            eprintln!(
+                "Failed to retrieve pipeline status: {:?}",
+                response.status()
+            );
+        }
+        // Sleep for a while before checking again (e.g., every 30 seconds)
+        thread::sleep(Duration::from_secs(10));
+    }
+    Ok(())
 }

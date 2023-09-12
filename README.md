@@ -6,11 +6,12 @@ cli client to execute Azure pipelines over REST API with personal acces token au
 azure_pipelines_runs 
 
 USAGE:
-    azp_runs [OPTIONS] --organization <organization> --pipeline_id <pipeline_id> --project <project>
+    azp_runs [FLAGS] [OPTIONS] --organization <organization> --pipeline_id <pipeline_id> --project <project>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
+    -w, --watch      Watch pipeline status and block untill finished
 
 OPTIONS:
     -o, --organization <organization>                  Azure DevOps Organization name
