@@ -49,6 +49,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Create an HTTP client
     let client = Client::new();
 
+    // create a valid json body from the template parameters
     let template_params = &config.template_parameters;
     let json_result = match pipeline_parameters(template_params) {
         Ok(json_result) => json_result,
@@ -74,11 +75,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let response_object: Response = serde_json::from_str(&response_str)
                 .unwrap();
 
-            println!("Pipeline [{}] triggered successfully!",  response_object.pipeline.name);
+            println!("Pipeline [{}] triggered successfully!",  
+                response_object.pipeline.name);
             Ok(())
         }
         _ => {
-            eprintln!("Failed to trigger the pipeline run: {:?}", response.status());
+            eprintln!("Failed to trigger the pipeline run: {:?}", 
+                response.status());
             std::process::exit(1);
         }
     }
