@@ -51,9 +51,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    // Create an HTTP client
-    let client = Client::new();
-
     // create a valid json body from the template parameters
     let json_result;
     if config.template_parameters.len() != 0 {
@@ -66,6 +63,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         json_result = Value::Object(Map::new());
     }
 
+    // Create an HTTP client
+    let client = Client::new();
     // Send a POST request to trigger a pipeline run
     let response = client
         .post(&pipeline_run_url(&config))
@@ -93,7 +92,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             if config.watch == true {
                 // Call the watch function asynchronously
-                let watch_result = pipeline_watch(&config, pat.clone(), response_object.id).await;
+                let watch_result =
+                    pipeline_watch(client, &config, pat.clone(), response_object.id).await;
 
                 // Handle the result of the watch function
                 match watch_result {
@@ -125,11 +125,8 @@ fn is_valid_u32(value: String) -> Result<(), String> {
 }
 
 fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
-    // Get the parameters as a string
-    let params_str = template_params;
-
     // Parse the JSON string into a serde_json::Value
-    let parsed_json_result: Result<Value, _> = serde_json::from_str(params_str);
+    let parsed_json_result = serde_json::from_str(template_params);
 
     match parsed_json_result {
         Ok(json_obj) => {
@@ -241,14 +238,16 @@ fn pipeline_run_url(config: &Config) -> String {
     )
 }
 
-async fn pipeline_watch(config: &Config, pat: String, run_id: u32) -> Result<(), Box<dyn Error>> {
+async fn pipeline_watch(
+    client: Client,
+    config: &Config,
+    pat: String,
+    run_id: u32,
+) -> Result<(), Box<dyn Error>> {
     let pipeline_status_url = format!(
         "https://dev.azure.com/{}/{}/_apis/pipelines/{}/runs/{}?api-version=7.1-preview.1",
         config.organization, config.project, config.pipeline_id, run_id
     );
-
-    // Create an HTTP client
-    let client = Client::new();
 
     loop {
         // Send a GET request to the Azure DevOps API to get the pipeline run status
