@@ -70,27 +70,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
-    // Check for the Azure DevOps PAT environment variable
-    match env::var(AZURE_DEVOPS_PAT_ENV) {
-        Ok(pat) => Ok(pat),
-        Err(_) => {
-            let err_msg = format!(
-                "Please set the {} environment variable with your Azure DevOps Personal Access Token.",
-                AZURE_DEVOPS_PAT_ENV
-            );
-            Err(err_msg.into())
-        }
-    }
-}
-
-fn is_valid_u32(value: String) -> Result<(), String> {
-    match value.parse::<u32>() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(String::from("Invalid u32 value")),
-    }
-}
-
 pub fn get_args() -> Result<Config, Box<dyn Error>> {
     // Define and parse command-line arguments using clap
     let matches = App::new("azure_pipelines_runs")
@@ -156,6 +135,27 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
             .to_string(),
         watch: matches.is_present("watch"),
     })
+}
+
+fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
+    // Check for the Azure DevOps PAT environment variable
+    match env::var(AZURE_DEVOPS_PAT_ENV) {
+        Ok(pat) => Ok(pat),
+        Err(_) => {
+            let err_msg = format!(
+                "Please set the {} environment variable with your Azure DevOps Personal Access Token.",
+                AZURE_DEVOPS_PAT_ENV
+            );
+            Err(err_msg.into())
+        }
+    }
+}
+
+fn is_valid_u32(value: String) -> Result<(), String> {
+    match value.parse::<u32>() {
+        Ok(_) => Ok(()),
+        Err(_) => Err(String::from("Invalid u32 value")),
+    }
 }
 
 // create a valid json body from the template parameters
