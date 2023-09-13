@@ -36,7 +36,11 @@ cd azp_runs
 # build
 cargo build --release
 
-# run
+# execute an Azure pipeline
+./target/release/azp_runs -o "OrganizationName" -p "ProjectName" -i 999
+
+# execute an Azure pipeline with input parameters and wait for completion
+# when there is a requirement to block further execution untill completed
 ./target/release/azp_runs -o "OrganizationName" -p "ProjectName" -i 999 \
     --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}" \
     --watch
