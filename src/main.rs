@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use reqwest::{header, Client};
+use reqwest::{header, Client, ClientBuilder};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::env;
@@ -54,7 +54,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // Create an HTTP client
-    let client = Client::new();
+    //let client = Client::new();
+    let client = ClientBuilder::new()
+        .timeout(Duration::from_secs(10))
+        .build()?;
 
     let response = match pipeline_exec(&client, &config, &pat).await {
         Ok(response) => response,

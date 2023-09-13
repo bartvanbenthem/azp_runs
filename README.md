@@ -22,15 +22,21 @@ OPTIONS:
 
 ## Set environment variables
 ```bash
-# Bash
+#!/bin/bash
 export AZURE_DEVOPS_EXT_PAT='Azure DevOps personal access token'
 ```
 
 ## Build and Run
 ```bash
-cargo run --  --organization "Organization_Name" \
-              --pipeline_id 999 \
-              --project "Project_Name" \
-              --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}" \
-              --watch
+#!/bin/bash
+
+git clone https://github.com/bartvanbenthem/azp_runs.git
+cd azp_runs
+
+# build
+cargo build --release
+
+# run
+./target/release/azp_runs -o "OrganizationName" -i 999 -p "ProjectName" --watch \
+    --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}"
 ```
