@@ -20,7 +20,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
-struct Response {
+struct PipeLineResponse {
     pipeline: PipelineInfo,
     id: u32,
     state: String,
@@ -39,119 +39,55 @@ struct PipelineInfo {
 async fn main() -> Result<(), Box<dyn Error>> {
     let config = get_args().unwrap();
 
-    // Check for the Azure DevOps PAT environment variable
-    let pat = match env::var(AZURE_DEVOPS_PAT_ENV) {
+    // get PAT token from ENV variable
+    let pat = match get_pat_from_env() {
         Ok(pat) => pat,
-        Err(_) => {
-            eprintln!(
-                "Please set the {} environment variable with your Azure DevOps Personal Access Token.",
-                AZURE_DEVOPS_PAT_ENV
-            );
+        Err(err) => {
+            eprintln!("Error: {}", err);
             std::process::exit(1);
         }
     };
 
-    // create a valid json body from the template parameters
-    let json_result;
-    if config.template_parameters.len() != 0 {
-        let template_params = &config.template_parameters;
-        json_result = match pipeline_parameters(template_params) {
-            Ok(json_result) => json_result,
-            Err(e) => panic!("failed json parsing: {}", e),
-        };
-    } else {
-        json_result = Value::Object(Map::new());
-    }
-
     // Create an HTTP client
     let client = Client::new();
-    // Send a POST request to trigger a pipeline run
-    let response = client
-        .post(&pipeline_run_url(&config))
-        .header(header::ACCEPT, "application/json")
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(
-            header::AUTHORIZATION,
-            format!("Basic {}", base64::encode(&format!(":{}", pat))),
-        )
-        .json(&json_result)
-        .send()
-        .await?;
 
-    // Check the response status code
-    match response.status() {
-        reqwest::StatusCode::OK => {
-            let body = response.bytes().await?;
-            let response_str = String::from_utf8_lossy(&body);
-            let response_object: Response = serde_json::from_str(&response_str).unwrap();
-
-            println!(
-                "Pipeline [{}] with id [{}] triggered successfully, run id = [{}]",
-                response_object.pipeline.name, response_object.pipeline.id, response_object.id
-            );
-
-            if config.watch == true {
-                // Call the watch function asynchronously
-                let watch_result =
-                    pipeline_watch(client, &config, pat.clone(), response_object.id).await;
-
-                // Handle the result of the watch function
-                match watch_result {
-                    Ok(_) => {}
-                    Err(err) => {
-                        eprintln!("Error in watch function: {}", err);
-                        std::process::exit(1);
-                    }
-                }
-            }
-        }
-        _ => {
-            eprintln!(
-                "Failed to trigger the pipeline run: {:?}",
-                response.status()
-            );
+    let response = match pipeline_exec(&client, &config, &pat).await {
+        Ok(response) => response,
+        Err(err) => {
+            eprintln!("Error: {}", err);
             std::process::exit(1);
         }
-    }
+    };
+
+    match pipeline_validate_response(&client, response, &config, &pat).await {
+        Ok(()) => (),
+        Err(err) => {
+            eprintln!("Error: {}", err);
+            std::process::exit(1);
+        }
+    };
 
     Ok(())
+}
+
+fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
+    // Check for the Azure DevOps PAT environment variable
+    match env::var(AZURE_DEVOPS_PAT_ENV) {
+        Ok(pat) => Ok(pat),
+        Err(_) => {
+            let err_msg = format!(
+                "Please set the {} environment variable with your Azure DevOps Personal Access Token.",
+                AZURE_DEVOPS_PAT_ENV
+            );
+            Err(err_msg.into())
+        }
+    }
 }
 
 fn is_valid_u32(value: String) -> Result<(), String> {
     match value.parse::<u32>() {
         Ok(_) => Ok(()),
         Err(_) => Err(String::from("Invalid u32 value")),
-    }
-}
-
-fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
-    // Parse the JSON string into a serde_json::Value
-    let parsed_json_result = serde_json::from_str(template_params);
-
-    match parsed_json_result {
-        Ok(json_obj) => {
-            // Ensure the JSON object is a JSON object (not an array, null, etc.)
-            if let Value::Object(template_parameters) = json_obj {
-                // Prepare the JSON request body with template parameters
-                let request_body = json!({
-                    "resources": {
-                        "repositories": {
-                            "self": {},
-                        },
-                    },
-                    "templateParameters": template_parameters,
-                });
-
-                // Returns the generated JSON for testing
-                Ok(request_body)
-            } else {
-                panic!("Invalid JSON object.");
-            }
-        }
-        Err(e) => {
-            eprintln!("Failed to parse JSON: {}", e);
-            Err(Box::new(e))
-        }
     }
 }
 
@@ -222,6 +158,53 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
     })
 }
 
+// create a valid json body from the template parameters
+fn templ_param_to_json(template_parameters: &String) -> Value {
+    let json_result;
+    if template_parameters.len() != 0 {
+        let template_params = &template_parameters;
+        json_result = match pipeline_parameters(template_params) {
+            Ok(json_result) => json_result,
+            Err(e) => panic!("failed json parsing: {}", e),
+        };
+        json_result
+    } else {
+        json_result = Value::Object(Map::new());
+        json_result
+    }
+}
+
+fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
+    // Parse the JSON string into a serde_json::Value
+    let parsed_json_result = serde_json::from_str(template_params);
+
+    match parsed_json_result {
+        Ok(json_obj) => {
+            // Ensure the JSON object is a JSON object (not an array, null, etc.)
+            if let Value::Object(template_parameters) = json_obj {
+                // Prepare the JSON request body with template parameters
+                let request_body = json!({
+                    "resources": {
+                        "repositories": {
+                            "self": {},
+                        },
+                    },
+                    "templateParameters": template_parameters,
+                });
+
+                // Returns the generated JSON for testing
+                Ok(request_body)
+            } else {
+                panic!("Invalid JSON object.");
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to parse JSON: {}", e);
+            Err(Box::new(e))
+        }
+    }
+}
+
 // Pipeline run URL builder function
 fn pipeline_run_url(config: &Config) -> String {
     format!(
@@ -230,10 +213,75 @@ fn pipeline_run_url(config: &Config) -> String {
     )
 }
 
-async fn pipeline_watch(
-    client: Client,
+async fn pipeline_exec(
+    client: &Client,
     config: &Config,
-    pat: String,
+    pat: &String,
+) -> Result<reqwest::Response, Box<dyn Error>> {
+    // Send a POST request to trigger a pipeline run
+    let response = client
+        .post(&pipeline_run_url(&config))
+        .header(header::ACCEPT, "application/json")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(
+            header::AUTHORIZATION,
+            format!("Basic {}", base64::encode(&format!(":{}", pat))),
+        )
+        .json(&templ_param_to_json(&config.template_parameters))
+        .send()
+        .await?;
+
+    Ok(response)
+}
+
+async fn pipeline_validate_response(
+    client: &Client,
+    response: reqwest::Response,
+    config: &Config,
+    pat: &String,
+) -> Result<(), Box<dyn Error>> {
+    // Check the response status code
+    match response.status() {
+        reqwest::StatusCode::OK => {
+            let body = response.bytes().await?;
+            let response_str = String::from_utf8_lossy(&body);
+            let response_object: PipeLineResponse = serde_json::from_str(&response_str).unwrap();
+
+            println!(
+                "Pipeline [{}] with id [{}] triggered successfully, run id = [{}]",
+                response_object.pipeline.name, response_object.pipeline.id, response_object.id
+            );
+
+            if config.watch == true {
+                // Call the watch function asynchronously
+                let watch_result = pipeline_watch(&client, &config, &pat, response_object.id).await;
+
+                // Handle the result of the watch function
+                match watch_result {
+                    Ok(()) => Ok(()),
+                    Err(err) => {
+                        eprintln!("Error in watch function: {}", err);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                Ok(())
+            }
+        }
+        _ => {
+            eprintln!(
+                "Failed to trigger the pipeline run, status code: {:?}",
+                response.status()
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn pipeline_watch(
+    client: &Client,
+    config: &Config,
+    pat: &String,
     run_id: u32,
 ) -> Result<(), Box<dyn Error>> {
     let pipeline_status_url = format!(
@@ -256,7 +304,7 @@ async fn pipeline_watch(
 
         // Check if the request was successful
         if response.status().is_success() {
-            let status_json: Response = response.json().await?;
+            let status_json: PipeLineResponse = response.json().await?;
             let status = status_json.state.as_str();
             // Check if the pipeline has finished executing
             if status == "completed" || status == "canceled" || status == "failed" {
