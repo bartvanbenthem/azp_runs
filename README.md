@@ -38,5 +38,5 @@ cargo build --release
 
 # run
 ./target/release/azp_runs -o "OrganizationName" -i 999 -p "ProjectName" --watch \
-    --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}"
+    --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}" #optional
 ```
