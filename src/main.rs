@@ -27,6 +27,11 @@ struct PipeLineResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct ApiResponse {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct PipelineInfo {
     //url: String,
     id: i32,
@@ -241,7 +246,9 @@ async fn pipeline_validate_response(
     pat: &String,
 ) -> Result<(), Box<dyn Error>> {
     // Check the response status code
-    match response.status() {
+    let status_code = response.status();
+
+    match status_code {
         reqwest::StatusCode::OK => {
             let body = response.bytes().await?;
             let response_str = String::from_utf8_lossy(&body);
@@ -269,9 +276,10 @@ async fn pipeline_validate_response(
             }
         }
         _ => {
+            let api_response: ApiResponse = response.json().await?;
             let err_msg = format!(
-                "Failed to trigger the pipeline run, status code: {:?}",
-                response.status()
+                "Failed to trigger the pipeline run, status code: {:?} \nMessage: {:?}",
+                status_code, api_response.message,
             );
             Err(err_msg.into())
         }
