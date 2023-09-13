@@ -201,14 +201,6 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
         )
         .get_matches();
 
-    let w: bool;
-    // Check if the --watch parameter was provided
-    if matches.is_present("watch") {
-        w = true;
-    } else {
-        w = false;
-    }
-
     Ok(Config {
         organization: matches
             .value_of("organization")
@@ -226,7 +218,7 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
             .value_of("template_parameters")
             .unwrap_or("")
             .to_string(),
-        watch: w,
+        watch: matches.is_present("watch"),
     })
 }
 
