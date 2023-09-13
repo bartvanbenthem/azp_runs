@@ -40,8 +40,12 @@ cargo build --release
 ./target/release/azp_runs -o "OrganizationName" -p "ProjectName" -i 999
 
 # execute an Azure pipeline with input parameters and wait for completion
-# when there is a requirement to block further execution untill completed
 ./target/release/azp_runs -o "OrganizationName" -p "ProjectName" -i 999 \
     --template_parameters "{\"param1\": \"value1\", \"param2\": \"value2\"}" \
     --watch
+
+# the --watch parameter can be used in more complex orchestration scenarios,
+# that requires different parts of the pipeline to wait on the result and
+# block further execution untill the pipeline status is completed
+# or just to give more insight into the pipeline status and final result.
 ```
