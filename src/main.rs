@@ -78,6 +78,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// --------------------------------------------------
+
+fn is_valid_u32(value: String) -> Result<(), String> {
+    match value.parse::<u32>() {
+        Ok(_) => Ok(()),
+        Err(_) => Err(String::from("Invalid u32 value")),
+    }
+}
+
 pub fn get_args() -> Result<Config, Box<dyn Error>> {
     // Define and parse command-line arguments using clap
     let matches = App::new("azure_pipelines_runs")
@@ -145,6 +154,8 @@ pub fn get_args() -> Result<Config, Box<dyn Error>> {
     })
 }
 
+// --------------------------------------------------
+
 fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
     // Check for the Azure DevOps PAT environment variable
     match env::var(AZURE_DEVOPS_PAT_ENV) {
@@ -159,12 +170,7 @@ fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
     }
 }
 
-fn is_valid_u32(value: String) -> Result<(), String> {
-    match value.parse::<u32>() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(String::from("Invalid u32 value")),
-    }
-}
+// --------------------------------------------------
 
 // create a valid json body from the template parameters
 fn templ_param_to_json(template_parameters: &String) -> Value {
@@ -181,6 +187,8 @@ fn templ_param_to_json(template_parameters: &String) -> Value {
         json_result
     }
 }
+
+// --------------------------------------------------
 
 fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
     // Parse the JSON string into a serde_json::Value
@@ -212,6 +220,8 @@ fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
         }
     }
 }
+
+// --------------------------------------------------
 
 // Pipeline run URL builder function
 fn pipeline_run_url(config: &Config) -> String {
@@ -335,3 +345,7 @@ async fn pipeline_watch(
     }
     Ok(())
 }
+
+// --------------------------------------------------
+// UNIT TESTS
+// --------------------------------------------------
