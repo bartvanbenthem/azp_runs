@@ -269,11 +269,11 @@ async fn pipeline_validate_response(
             }
         }
         _ => {
-            eprintln!(
+            let err_msg = format!(
                 "Failed to trigger the pipeline run, status code: {:?}",
                 response.status()
             );
-            std::process::exit(1);
+            Err(err_msg.into())
         }
     }
 }
