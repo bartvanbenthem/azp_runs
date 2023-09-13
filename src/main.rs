@@ -172,25 +172,7 @@ fn get_pat_from_env() -> Result<String, Box<dyn Error>> {
 
 // --------------------------------------------------
 
-// create a valid json body from the template parameters
-fn templ_param_to_json(template_parameters: &String) -> Value {
-    let json_result;
-    if template_parameters.len() != 0 {
-        let template_params = &template_parameters;
-        json_result = match pipeline_parameters(template_params) {
-            Ok(json_result) => json_result,
-            Err(e) => panic!("failed json parsing: {}", e),
-        };
-        json_result
-    } else {
-        json_result = Value::Object(Map::new());
-        json_result
-    }
-}
-
-// --------------------------------------------------
-
-fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
+fn param_to_request_body(template_params: &str) -> Result<Value, Box<dyn Error>> {
     // Parse the JSON string into a serde_json::Value
     let parsed_json_result = serde_json::from_str(template_params);
 
@@ -221,6 +203,22 @@ fn pipeline_parameters(template_params: &str) -> Result<Value, Box<dyn Error>> {
     }
 }
 
+// create a valid json body from the template parameters
+fn param_str_to_json(template_parameters: &String) -> Value {
+    let json_result;
+    if template_parameters.len() != 0 {
+        let template_params = &template_parameters;
+        json_result = match param_to_request_body(template_params) {
+            Ok(json_result) => json_result,
+            Err(e) => panic!("failed json parsing: {}", e),
+        };
+        json_result
+    } else {
+        json_result = Value::Object(Map::new());
+        json_result
+    }
+}
+
 // --------------------------------------------------
 
 // Pipeline run URL builder function
@@ -245,7 +243,7 @@ async fn pipeline_exec(
             header::AUTHORIZATION,
             format!("Basic {}", base64::encode(&format!(":{}", pat))),
         )
-        .json(&templ_param_to_json(&config.template_parameters))
+        .json(&param_str_to_json(&config.template_parameters))
         .send()
         .await?;
 
