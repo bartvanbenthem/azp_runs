@@ -1,5 +1,5 @@
 # Azure Pipelines RUNS Client
-cli client to execute Azure pipelines over the Runs REST API with personal acces token authentication. Integrates with Azure pipeline template parameters for dynamic execution. When specified, the pipeline run state is being tracked automatically and the status results are being updated for every run. Perfect for the creation and integration of orchestrators that rely on complex and imperative orchestration on multiple other pipelines for end-to-end process automation.
+Script to execute Azure pipelines over the Runs REST API with personal acces token authentication. Integrates with Azure pipeline template parameters for dynamic execution. When specified, the pipeline run state is being tracked automatically and the status results are being updated for every run. Perfect for the creation and integration of orchestrators that rely on complex and imperative orchestration on multiple other pipelines for end-to-end process automation.
 
 ## Usage
 ```text
